@@ -11,12 +11,13 @@ from fastapi.staticfiles import StaticFiles
 from fastapi.templating import Jinja2Templates
 
 from app.cloud import MiCloudClient
-from app.feeder import FeederController
+from app.feeder import FeederController, parse_schedule, encode_schedule
 from app.sensor import SensorController
 from app.feed_history import FeedHistory
 from app.cat_profile import CatProfileStore
 from app.nutrition import calculate_from_profile
 from app.food_db import get_brands, get_by_brand, get_by_id as get_food_by_id
+from app.feed_calculator import generate_plan
 
 load_dotenv()
 
@@ -133,6 +134,9 @@ async def get_dashboard():
         nutrition = calculate_from_profile(cat_profile.get())
         goal_grams = nutrition["daily_grams"] if nutrition else None
 
+        # 记录设备进食数据（每天保存最大值）
+        history.record_device_eaten(feeder_state.get("eaten_food"))
+
         # 饱食度 — 传入设备实际进食数据 + 动态目标
         fullness = history.get_fullness(
             device_eaten=feeder_state.get("eaten_food"),
@@ -148,6 +152,7 @@ async def get_dashboard():
             "fullness": fullness,
             "cat": cat_profile.get(),
             "nutrition": nutrition,
+            "grams_per_portion": cat_profile.get().get("portion_grams", 10.0),
         }
     except Exception as e:
         return JSONResponse({"ok": False, "error": str(e)}, status_code=500)
@@ -174,6 +179,83 @@ async def toggle_beep(on: bool = True):
     return {"ok": ok, "message": "提示音已开启" if on else "提示音已关闭"}
 
 
+@app.post("/api/plan")
+async def update_plan(request: Request):
+    """更新喂食计划"""
+    if feeder is None:
+        return JSONResponse({"ok": False, "error": init_error or "系统未初始化"}, status_code=503)
+    try:
+        body = await request.json()
+    except Exception:
+        return JSONResponse({"ok": False, "error": "请求格式错误"}, status_code=400)
+
+    meals = body.get("meals", [])
+    enabled = bool(body.get("enabled", True))
+
+    # 校验
+    if not isinstance(meals, list) or len(meals) > 8:
+        return JSONResponse({"ok": False, "error": "计划最多支持 8 个喂食时间"}, status_code=400)
+    if enabled and len(meals) == 0:
+        return JSONResponse({"ok": False, "error": "启用计划至少需要一个喂食时间"}, status_code=400)
+
+    seen = set()
+    valid_meals = []
+    for m in meals:
+        hour = int(m.get("hour", 0))
+        minute = int(m.get("minute", 0))
+        portions = int(m.get("portions", 1))
+        if hour < 0 or hour > 23 or minute < 0 or minute > 59:
+            return JSONResponse({"ok": False, "error": "时间格式错误"}, status_code=400)
+        if portions < 1 or portions > 99:
+            return JSONResponse({"ok": False, "error": "单次出粮份数需为 1-99"}, status_code=400)
+        key = f"{hour:02d}:{minute:02d}"
+        if key in seen:
+            return JSONResponse({"ok": False, "error": "存在重复的喂食时间"}, status_code=400)
+        seen.add(key)
+        valid_meals.append({"hour": hour, "minute": minute, "portions": portions})
+
+    try:
+        ok = await feeder.set_schedule(valid_meals, enabled)
+        if not ok:
+            return JSONResponse({"ok": False, "error": "写入设备失败"}, status_code=500)
+
+        # 重读确认
+        state = await feeder.get_state()
+        feeding_plan = state.to_dict().get("feeding_plan", {})
+        return {"ok": True, "data": feeding_plan, "message": "喂食计划已更新"}
+    except Exception as e:
+        return JSONResponse({"ok": False, "error": str(e)}, status_code=500)
+
+
+@app.post("/api/plan/generate")
+async def generate_feeding_plan(request: Request):
+    """根据营养建议自动生成喂食计划"""
+    try:
+        body = await request.json()
+    except Exception:
+        body = {}
+
+    # 获取营养数据
+    nutrition = calculate_from_profile(cat_profile.get())
+    if nutrition is None or nutrition.get("daily_grams", 0) <= 0:
+        return JSONResponse({"ok": False, "error": "请先完善猫咪档案（至少需要体重）"}, status_code=400)
+
+    num_meals = int(body.get("num_meals", 3))
+    grams_per_portion = float(body.get("grams_per_portion", 0) or cat_profile.get().get("portion_grams", 10.0))
+
+    result = generate_plan(
+        daily_grams=nutrition["daily_grams"],
+        grams_per_portion=grams_per_portion,
+        num_meals=num_meals,
+    )
+
+    if "error" in result:
+        return JSONResponse({"ok": False, "error": result["error"]}, status_code=400)
+
+    result["kcal_per_gram"] = nutrition.get("kcal_per_gram")
+    return {"ok": True, "data": result}
+
+
 @app.get("/api/cat")
 async def get_cat():
     """获取猫咪档案"""
@@ -193,6 +275,7 @@ async def update_cat(request: Request):
         weight=str(body.get("weight", "")).strip(),
         food_id=str(body.get("food_id", "")).strip(),
         food_label=str(body.get("food_label", "")).strip(),
+        portion_grams=float(body["portion_grams"]) if "portion_grams" in body else None,
     )
     return {"ok": True, "data": data}
 
@@ -214,6 +297,35 @@ async def get_nutrition():
 async def list_brands():
     """获取所有猫粮品牌"""
     return {"ok": True, "data": get_brands()}
+
+
+@app.get("/api/history")
+async def get_history(days: int = 7):
+    """获取近 N 天的喂食历史汇总"""
+    if feeder is None:
+        return JSONResponse({"ok": False, "error": init_error or "系统未初始化"}, status_code=503)
+    try:
+        days = min(max(days, 1), 30)
+        daily = history.get_daily_summary(days)
+
+        profile = cat_profile.get()
+        portion_grams = profile.get("portion_grams", 10.0)
+
+        nutrition = calculate_from_profile(profile)
+        goal_grams = nutrition["daily_grams"] if nutrition else None
+        goal_portions = max(1, round(goal_grams / portion_grams)) if goal_grams and portion_grams else None
+
+        return {
+            "ok": True,
+            "data": {
+                "days": daily,
+                "goal_grams": goal_grams,
+                "goal_portions": goal_portions,
+                "grams_per_portion": portion_grams,
+            },
+        }
+    except Exception as e:
+        return JSONResponse({"ok": False, "error": str(e)}, status_code=500)
 
 
 @app.get("/api/foods")

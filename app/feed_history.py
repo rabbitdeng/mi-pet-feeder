@@ -31,6 +31,7 @@ class FeedHistory:
     def __init__(self, filepath: str = "feed_history.json"):
         self._filepath = filepath
         self._events: list[FeedEvent] = []
+        self._daily_device: dict[str, int] = {}  # { "YYYY-MM-DD": grams }
         self._load()
 
     def record(self, portions: int):
@@ -40,6 +41,16 @@ class FeedHistory:
             portions=portions,
         ))
         self._save()
+
+    def record_device_eaten(self, grams: int | None):
+        """记录今日设备进食克数（取最大值）"""
+        if grams is None or grams <= 0:
+            return
+        today = datetime.date.today().isoformat()
+        current = self._daily_device.get(today, 0)
+        if grams > current:
+            self._daily_device[today] = grams
+            self._save()
 
     @property
     def events(self) -> list[FeedEvent]:
@@ -113,19 +124,56 @@ class FeedHistory:
     def _save(self):
         """持久化到 JSON 文件"""
         try:
-            data = [{"ts": e.timestamp, "p": e.portions} for e in self._events]
+            data = {
+                "events": [{"ts": e.timestamp, "p": e.portions} for e in self._events],
+                "daily_device": self._daily_device,
+            }
             with open(self._filepath, "w") as f:
                 json.dump(data, f)
         except Exception:
             pass
 
+    def get_daily_summary(self, days: int = 7) -> list[dict]:
+        """返回近 N 天的每日喂食汇总，按日期升序，无记录日填 0，含设备克数"""
+        today = datetime.date.today()
+        start = today - datetime.timedelta(days=days - 1)
+
+        # 按日期分组（手动记录）
+        daily: dict[str, int] = {}
+        for e in self._events:
+            d = datetime.date.fromtimestamp(e.timestamp)
+            if d >= start:
+                key = d.isoformat()
+                daily[key] = daily.get(key, 0) + e.portions
+
+        # 生成日期序列（升序），合并设备克数
+        result = []
+        for i in range(days):
+            d = start + datetime.timedelta(days=i)
+            key = d.isoformat()
+            result.append({
+                "date": key,
+                "portions": daily.get(key, 0),
+                "device_grams": self._daily_device.get(key),  # None if no device data
+            })
+
+        return result
+
     def _load(self):
-        """从 JSON 文件加载"""
+        """从 JSON 文件加载（兼容旧格式）"""
         if not os.path.exists(self._filepath):
             return
         try:
             with open(self._filepath) as f:
                 data = json.load(f)
-            self._events = [FeedEvent(timestamp=d["ts"], portions=d["p"]) for d in data]
+            if isinstance(data, dict):
+                self._events = [FeedEvent(timestamp=d["ts"], portions=d["p"])
+                                for d in data.get("events", [])]
+                self._daily_device = data.get("daily_device", {})
+            elif isinstance(data, list):
+                # 兼容旧格式（纯数组）
+                self._events = [FeedEvent(timestamp=d["ts"], portions=d["p"]) for d in data]
+                self._daily_device = {}
         except Exception:
             self._events = []
+            self._daily_device = {}

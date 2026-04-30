@@ -5,6 +5,8 @@
     <meta name="viewport" content="width=device-width, initial-scale=1.0, user-scalable=no">
     <title>猫咪仪表盘</title>
     <link rel="stylesheet" href="/static/dashboard.css">
+    <script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.0/dist/chart.umd.min.js"
+            onerror="this.onerror=null;this.src='https://unpkg.com/chart.js@4.4.0/dist/chart.umd.min.js'"></script>
 </head>
 <body>
     <div class="container">
@@ -92,6 +94,11 @@
                 <div id="food-detail" style="font-size:0.75em;color:var(--text-light);margin-top:4px;text-align:right;" hidden>
                     <span id="food-kcal-info"></span>
                 </div>
+                <div class="cat-edit-row">
+                    <label>每份</label>
+                    <input id="cat-portion-input" type="number" step="0.5" min="1" max="50" placeholder="10.0g">
+                    <span style="font-size:0.75em;color:var(--text-light);margin-left:4px;">g/份</span>
+                </div>
                 <div style="display:flex;gap:8px;margin-top:10px;">
                     <button class="quick-btn secondary" onclick="toggleCatEdit()">取消</button>
                     <button class="quick-btn primary" id="cat-save-btn" onclick="saveCat()">保存</button>
@@ -119,6 +126,15 @@
                 </div>
             </div>
             <div style="margin-top:4px;font-size:0.7em;color:var(--text-light);text-align:center;" id="nut-formula"></div>
+        </div>
+
+        <!-- 7日进食趋势 -->
+        <div class="card" id="trend-card" hidden>
+            <div class="card-title">📈 7日进食趋势</div>
+            <div style="position:relative;height:180px;">
+                <canvas id="trend-chart"></canvas>
+            </div>
+            <div style="margin-top:6px;font-size:0.75em;color:var(--text-light);text-align:center;" id="trend-summary"></div>
         </div>
 
         <!-- 饱食度 -->
@@ -157,10 +173,59 @@
 
         <!-- 今日喂食计划 -->
         <div class="card" id="plan-card" hidden>
-            <div class="card-title">⏰ 今日喂食计划 <span style="font-weight:400;font-size:0.85em;color:var(--text-light)" id="plan-status"></span></div>
-            <div id="plan-list" style="font-size:0.9em;color:var(--text-light);"></div>
-            <div style="margin-top:6px;font-size:0.8em;color:var(--text-light);text-align:right">
-                计划总量: <strong id="plan-total">0</strong> 份
+            <div class="card-title" style="display:flex;justify-content:space-between;align-items:center;">
+                ⏰ 今日喂食计划 <span style="font-weight:400;font-size:0.85em;color:var(--text-light)" id="plan-status"></span>
+                <button class="edit-btn" id="plan-edit-btn" onclick="togglePlanEdit()">✏️ 编辑</button>
+            </div>
+            <!-- 查看模式 -->
+            <div id="plan-view">
+                <div id="plan-list" style="font-size:0.9em;color:var(--text-light);"></div>
+                <div style="margin-top:6px;font-size:0.8em;color:var(--text-light);text-align:right">
+                    计划总量: <strong id="plan-total">0</strong> 份
+                </div>
+            </div>
+            <!-- 编辑模式 -->
+            <div id="plan-edit" style="display:none;">
+                <button class="quick-btn secondary" style="width:100%;margin-bottom:8px;"
+                        onclick="toggleAutoGen()">✨ 自动生成计划</button>
+                <!-- 自动生成配置面板 -->
+                <div id="auto-gen-config" style="display:none;background:#FFF8F0;border-radius:12px;padding:12px;margin-bottom:8px;">
+                    <div style="font-size:0.8em;color:var(--text-light);margin-bottom:8px;">
+                        根据猫咪档案和猫粮热量自动计算
+                    </div>
+                    <div class="cat-edit-row">
+                        <label>餐数</label>
+                        <select id="gen-num-meals" style="flex:1;padding:8px 12px;border:1px solid #FFE0B2;border-radius:10px;">
+                            <option value="2">2 餐/天</option>
+                            <option value="3" selected>3 餐/天</option>
+                            <option value="4">4 餐/天</option>
+                        </select>
+                    </div>
+                    <div class="cat-edit-row">
+                        <label>每份</label>
+                        <input type="number" id="gen-grams-per-portion" value="10" min="1" max="50" step="0.5"
+                               style="flex:1;padding:8px 12px;border:1px solid #FFE0B2;border-radius:10px;font-size:0.95em;">
+                        <span style="font-size:0.8em;color:var(--text-light);">g</span>
+                    </div>
+                    <div style="display:flex;gap:8px;margin-top:8px;">
+                        <button class="quick-btn secondary" style="flex:1;" onclick="toggleAutoGen()">取消</button>
+                        <button class="quick-btn primary" style="flex:1;" id="gen-btn" onclick="doAutoGenerate()">生成</button>
+                    </div>
+                </div>
+                <div id="plan-meal-rows"></div>
+                <button class="quick-btn secondary" style="width:100%;margin-top:8px;"
+                        onclick="addMealSlot()">+ 添加喂食时间</button>
+                <div style="display:flex;align-items:center;justify-content:space-between;margin-top:12px;">
+                    <span style="font-size:0.9em;">启用计划</span>
+                    <label class="toggle-switch">
+                        <input type="checkbox" id="plan-enabled-toggle">
+                        <span class="toggle-slider"></span>
+                    </label>
+                </div>
+                <div style="display:flex;gap:8px;margin-top:12px;">
+                    <button class="quick-btn secondary" onclick="cancelPlanEdit()">取消</button>
+                    <button class="quick-btn primary" id="plan-save-btn" onclick="savePlan()">保存</button>
+                </div>
             </div>
         </div>
 
@@ -206,6 +271,11 @@
     <script>
         const RING_CIRCUMFERENCE = 213.6;
 
+        // 趋势图缓存
+        let trendChart = null;
+        let lastTrendFetch = 0;
+        let cachedTrendData = null;
+
         function setConnected(ok) {
             document.getElementById('conn-dot').className = 'connection-dot ' + (ok ? 'online' : 'offline');
             document.getElementById('conn-text').textContent = ok ? '已连接' : '断开';
@@ -222,6 +292,117 @@
             } catch (e) {
                 setConnected(false);
             }
+        }
+
+        async function refreshTrend(force) {
+            const now = Date.now();
+            if (!force && cachedTrendData && now - lastTrendFetch < 60000) {
+                drawTrendChart(cachedTrendData);
+                return;
+            }
+            lastTrendFetch = now;
+            try {
+                const resp = await fetch('/api/history?days=7');
+                const json = await resp.json();
+                if (json.ok) {
+                    cachedTrendData = json.data;
+                    drawTrendChart(json.data);
+                }
+            } catch (e) {}
+        }
+
+        function drawTrendChart(data) {
+            if (typeof Chart === 'undefined') { return; }  // CDN 未加载则跳过
+            const card = document.getElementById('trend-card');
+            const summary = document.getElementById('trend-summary');
+            if (!data || !data.days || data.days.length === 0) {
+                card.hidden = true;
+                return;
+            }
+            card.hidden = false;
+
+            // 销毁旧图表
+            try {
+                if (trendChart) { trendChart.destroy(); trendChart = null; }
+            } catch (e) {}
+
+            const labels = data.days.map(d => d.date.slice(5));  // MM-DD
+            const portionsData = data.days.map(d => d.portions);
+            const deviceGrams = data.days.map(d => d.device_grams);
+            const total = portionsData.reduce((a, b) => a + b, 0);
+            const avg = Math.round(total / portionsData.length);
+            const totalDeviceG = deviceGrams.reduce((a, b) => a + (b || 0), 0);
+            const daysWithDevice = deviceGrams.filter(g => g != null).length;
+
+            const gp = data.grams_per_portion || 10;
+            const goalPortions = data.goal_portions;
+
+            let summaryText = '近7天共 ' + total + ' 份 · 日均 ' + avg + ' 份';
+            if (totalDeviceG > 0) {
+                summaryText += ' · 设备记录 ' + totalDeviceG + 'g (' + daysWithDevice + '天)';
+            }
+            if (goalPortions) {
+                summaryText += ' · 目标 ' + goalPortions + ' 份/天';
+            }
+            summary.textContent = summaryText;
+
+            const ctx = document.getElementById('trend-chart').getContext('2d');
+
+            const datasets = [{
+                label: '每日份数',
+                data: portionsData,
+                borderColor: '#FF9800',
+                backgroundColor: 'rgba(255, 152, 0, 0.1)',
+                fill: true,
+                tension: 0.3,
+                pointRadius: 4,
+                pointBackgroundColor: '#FF9800',
+            }];
+
+            if (goalPortions) {
+                datasets.push({
+                    label: '每日目标',
+                    data: new Array(portionsData.length).fill(goalPortions),
+                    borderColor: '#66BB6A',
+                    borderDash: [6, 4],
+                    borderWidth: 2,
+                    pointRadius: 0,
+                    fill: false,
+                });
+            }
+
+            trendChart = new Chart(ctx, {
+                type: 'line',
+                data: { labels, datasets },
+                options: {
+                    responsive: true,
+                    maintainAspectRatio: false,
+                    plugins: {
+                        legend: {
+                            display: true,
+                            position: 'bottom',
+                            labels: { boxWidth: 12, padding: 16, usePointStyle: true }
+                        },
+                        tooltip: {
+                            callbacks: {
+                                label: function(ctx) { return ctx.dataset.label + ': ' + ctx.parsed.y + ' 份'; }
+                            }
+                        }
+                    },
+                    scales: {
+                        x: { grid: { display: false } },
+                        y: {
+                            beginAtZero: true,
+                            stepSize: 1,
+                            ticks: { callback: function(v) { return Math.round(v) + ' 份'; } },
+                            max: Math.ceil(Math.max(
+                                Math.max(...portionsData) * 1.3 || 5,
+                                (goalPortions || 0) * 1.3
+                            ))
+                        }
+                    }
+                }
+            });
         }
 
         function updateUI(data) {
@@ -272,6 +453,9 @@
             // 喂食计划 + 今日记录
             const feeder = data.feeder || {};
             renderDailyRecords(feeder, f);
+
+            // 7日趋势图 (force true on first load)
+            refreshTrend(false);
         }
 
         function renderDailyRecords(feeder, f) {
@@ -298,6 +482,11 @@
                     </div>`;
                 }).join('');
                 document.getElementById('plan-total').textContent = plan.total_portions;
+                // 关闭编辑模式时不刷新编辑区
+                if (document.getElementById('plan-edit').style.display === 'none') {
+                    planEditState.originalMeals = JSON.parse(JSON.stringify(plan.meals));
+                    planEditState.originalEnabled = plan.enabled;
+                }
             } else {
                 planCard.hidden = true;
             }
@@ -531,6 +720,7 @@
                 document.getElementById('cat-breed-input').value = cat.breed || '';
                 document.getElementById('cat-age-input').value = cat.age || '';
                 document.getElementById('cat-weight-input').value = cat.weight || '';
+                document.getElementById('cat-portion-input').value = cat.portion_grams != null ? cat.portion_grams : 10;
             }
         }
 
@@ -576,11 +766,12 @@
             const weight = document.getElementById('cat-weight-input').value.trim();
             const food_id = document.getElementById('cat-food-product').value;
             const food_label = document.getElementById('cat-food-product').selectedOptions[0]?.textContent || '';
+            const portion_grams = parseFloat(document.getElementById('cat-portion-input').value) || 10;
             try {
                 const resp = await fetch('/api/cat', {
                     method: 'POST',
                     headers: {'Content-Type': 'application/json'},
-                    body: JSON.stringify({breed, age, weight, food_id, food_label})
+                    body: JSON.stringify({breed, age, weight, food_id, food_label, portion_grams})
                 });
                 const json = await resp.json();
                 if (json.ok) {
@@ -596,6 +787,158 @@
             btn.textContent = '保存';
         }
 
+        // ---- 喂食计划编辑 ----
+        const planEditState = {
+            meals: [],
+            enabled: true,
+            originalMeals: [],
+            originalEnabled: true,
+        };
+
+        function togglePlanEdit() {
+            const view = document.getElementById('plan-view');
+            const edit = document.getElementById('plan-edit');
+            const btn = document.getElementById('plan-edit-btn');
+
+            if (edit.style.display === 'none') {
+                // 进入编辑模式 — 从最新 feed 数据填充
+                view.style.display = 'none';
+                edit.style.display = 'block';
+                btn.textContent = '✖ 取消';
+
+                const meals = planEditState.originalMeals;
+                document.getElementById('plan-enabled-toggle').checked = planEditState.originalEnabled;
+                planEditState.meals = JSON.parse(JSON.stringify(meals));
+                planEditState.enabled = planEditState.originalEnabled;
+                renderMealRows();
+            } else {
+                cancelPlanEdit();
+            }
+        }
+
+        function renderMealRows() {
+            const container = document.getElementById('plan-meal-rows');
+            container.innerHTML = planEditState.meals.map((m, i) => {
+                const timeVal = `${String(m.hour).padStart(2, '0')}:${String(m.minute).padStart(2, '0')}`;
+                return `<div class="plan-meal-row" data-index="${i}">
+                    <input type="time" value="${timeVal}" class="meal-time-input" onchange="onMealTimeChange(${i}, this.value)">
+                    <input type="number" value="${m.portions}" min="1" max="99" class="meal-portions-input"
+                           onchange="onMealPortionsChange(${i}, this.value)">
+                    <span style="font-size:0.8em;color:var(--text-light);">份</span>
+                    <button class="meal-delete-btn" onclick="removeMealSlot(${i})">✕</button>
+                </div>`;
+            }).join('');
+        }
+
+        function onMealTimeChange(index, timeVal) {
+            const parts = timeVal.split(':');
+            planEditState.meals[index].hour = parseInt(parts[0]) || 0;
+            planEditState.meals[index].minute = parseInt(parts[1]) || 0;
+        }
+
+        function onMealPortionsChange(index, val) {
+            planEditState.meals[index].portions = Math.max(1, Math.min(99, parseInt(val) || 1));
+        }
+
+        function addMealSlot() {
+            if (planEditState.meals.length >= 8) return;
+            // 找下一个空闲时间段
+            const used = new Set(planEditState.meals.map(m => m.hour * 60 + m.minute));
+            const defaults = [480, 720, 960, 1140, 780, 600, 300, 0]; // 8:00, 12:00, 16:00, 19:00, 13:00, 10:00, 5:00, 0:00
+            let slot = defaults.find(s => !used.has(s)) || 0;
+            planEditState.meals.push({hour: Math.floor(slot / 60), minute: slot % 60, portions: 3});
+            planEditState.meals.sort((a, b) => (a.hour * 60 + a.minute) - (b.hour * 60 + b.minute));
+            renderMealRows();
+        }
+
+        function removeMealSlot(index) {
+            planEditState.meals.splice(index, 1);
+            renderMealRows();
+        }
+
+        function cancelPlanEdit() {
+            document.getElementById('plan-view').style.display = 'block';
+            document.getElementById('plan-edit').style.display = 'none';
+            document.getElementById('plan-edit-btn').textContent = '✏️ 编辑';
+        }
+
+        async function savePlan() {
+            const btn = document.getElementById('plan-save-btn');
+            btn.disabled = true;
+            btn.textContent = '保存中...';
+
+            const meals = planEditState.meals;
+            const enabled = document.getElementById('plan-enabled-toggle').checked;
+
+            // 去重检查
+            const times = new Set();
+            for (const m of meals) {
+                const k = `${String(m.hour).padStart(2,'0')}:${String(m.minute).padStart(2,'0')}`;
+                if (times.has(k)) {
+                    alert('存在重复的喂食时间: ' + k);
+                    btn.disabled = false;
+                    btn.textContent = '保存';
+                    return;
+                }
+                times.add(k);
+            }
+
+            try {
+                const resp = await fetch('/api/plan', {
+                    method: 'POST',
+                    headers: {'Content-Type': 'application/json'},
+                    body: JSON.stringify({meals, enabled}),
+                });
+                const json = await resp.json();
+                if (json.ok) {
+                    cancelPlanEdit();
+                    refresh();
+                } else {
+                    alert('保存失败: ' + (json.error || '未知错误'));
+                }
+            } catch (e) {
+                alert('网络错误，请重试');
+            }
+            btn.disabled = false;
+            btn.textContent = '保存';
+        }
+
+        function toggleAutoGen() {
+            const panel = document.getElementById('auto-gen-config');
+            panel.style.display = panel.style.display === 'none' ? 'block' : 'none';
+        }
+
+        async function doAutoGenerate() {
+            const numMeals = parseInt(document.getElementById('gen-num-meals').value);
+            const gramsPerPortion = parseFloat(document.getElementById('gen-grams-per-portion').value) || 10;
+            const btn = document.getElementById('gen-btn');
+            btn.disabled = true;
+            btn.textContent = '计算中...';
+
+            try {
+                const resp = await fetch('/api/plan/generate', {
+                    method: 'POST',
+                    headers: {'Content-Type': 'application/json'},
+                    body: JSON.stringify({num_meals: numMeals, grams_per_portion: gramsPerPortion}),
+                });
+                const json = await resp.json();
+                if (json.ok) {
+                    const data = json.data;
+                    planEditState.meals = data.meals;
+                    planEditState.enabled = true;
+                    document.getElementById('plan-enabled-toggle').checked = true;
+                    renderMealRows();
+                    document.getElementById('auto-gen-config').style.display = 'none';
+                } else {
+                    alert('生成失败: ' + (json.error || '未知错误'));
+                }
+            } catch (e) {
+                alert('网络错误，请重试');
+            }
+            btn.disabled = false;
+            btn.textContent = '生成';
+        }
+
         // 定时刷新
         let countdown = 5;
         setInterval(() => {
@@ -608,7 +951,7 @@
         }, 1000);
 
         // 首次加载
-        refresh();
+        refresh().then(() => refreshTrend(true));
     </script>
 </body>
 </html>

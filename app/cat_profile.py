@@ -13,11 +13,12 @@ DEFAULT_KCAL = 3.7  # 默认干粮热量
 
 @dataclass
 class CatProfile:
-    breed: str = ""         # 品种
-    age: str = ""           # 年龄
-    weight: str = ""        # 体重
-    food_id: str = ""       # 猫粮产品 ID (对应 food_db 中的产品)
-    food_label: str = ""    # 猫粮显示名 (缓存，避免每次查库)
+    breed: str = ""             # 品种
+    age: str = ""               # 年龄
+    weight: str = ""            # 体重
+    food_id: str = ""           # 猫粮产品 ID (对应 food_db 中的产品)
+    food_label: str = ""        # 猫粮显示名 (缓存，避免每次查库)
+    portion_grams: float = 10.0 # 每份出粮克数 (用于克数换算)
 
     def to_dict(self) -> dict:
         return asdict(self)
@@ -38,6 +39,7 @@ class CatProfile:
             weight=str(d.get("weight", "")),
             food_id=str(d.get("food_id", "")),
             food_label=str(d.get("food_label", "")),
+            portion_grams=float(d.get("portion_grams", 10.0)),
         )
 
 
@@ -53,12 +55,15 @@ class CatProfileStore:
         return self.profile.to_dict()
 
     def update(self, breed: str = "", age: str = "", weight: str = "",
-               food_id: str = "", food_label: str = "") -> dict:
+               food_id: str = "", food_label: str = "",
+               portion_grams: float | None = None) -> dict:
         self.profile.breed = breed
         self.profile.age = age
         self.profile.weight = weight
         self.profile.food_id = food_id
         self.profile.food_label = food_label
+        if portion_grams is not None:
+            self.profile.portion_grams = portion_grams
         self._save()
         return self.profile.to_dict()
 

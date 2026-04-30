@@ -395,6 +395,70 @@ body::before {
     color: #666;
 }
 
+/* ---- 喂食计划编辑 ---- */
+.plan-meal-row {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    padding: 6px 0;
+    border-bottom: 1px solid #f5f5f5;
+}
+.meal-time-input {
+    padding: 6px 10px;
+    border: 1px solid #FFE0B2;
+    border-radius: 10px;
+    font-size: 0.9em;
+    outline: none;
+    flex: 1;
+}
+.meal-time-input:focus { border-color: var(--primary); }
+.meal-portions-input {
+    width: 52px;
+    padding: 6px;
+    border: 1px solid #FFE0B2;
+    border-radius: 10px;
+    font-size: 0.9em;
+    outline: none;
+    text-align: center;
+}
+.meal-portions-input:focus { border-color: var(--primary); }
+.meal-delete-btn {
+    background: none;
+    border: none;
+    color: #EF5350;
+    font-size: 1.1em;
+    cursor: pointer;
+    padding: 2px 6px;
+}
+
+/* iOS 风格 toggle */
+.toggle-switch {
+    position: relative;
+    display: inline-block;
+    width: 48px;
+    height: 26px;
+}
+.toggle-switch input { opacity: 0; width: 0; height: 0; }
+.toggle-slider {
+    position: absolute;
+    cursor: pointer;
+    top: 0; left: 0; right: 0; bottom: 0;
+    background-color: #ccc;
+    border-radius: 26px;
+    transition: 0.3s;
+}
+.toggle-slider:before {
+    content: "";
+    position: absolute;
+    height: 20px; width: 20px;
+    left: 3px; bottom: 3px;
+    background-color: white;
+    border-radius: 50%;
+    transition: 0.3s;
+}
+input:checked + .toggle-slider { background-color: var(--primary); }
+input:checked + .toggle-slider:before { transform: translateX(22px); }
+
 /* 动画 */
 @keyframes fadeIn {
     from { opacity: 0; transform: translateY(10px); }

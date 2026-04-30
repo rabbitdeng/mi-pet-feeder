@@ -56,6 +56,20 @@ def parse_schedule(raw: list | str | None) -> dict:
     }
 
 
+def encode_schedule(meals: list[dict], enabled: bool = True) -> str:
+    """编码喂食计划为设备格式
+    meals: [{"hour": 8, "minute": 0, "portions": 3}, ...]
+    返回: "[1,08000300,12000400,18000300]"
+    """
+    entries = [1 if enabled else 0]
+    for m in meals:
+        hh = str(m.get("hour", 0)).zfill(2)
+        mm = str(m.get("minute", 0)).zfill(2)
+        pp = str(m.get("portions", 1)).zfill(2)
+        entries.append(int(f"{hh}{mm}00{pp}"))
+    return str(entries).replace(" ", "")
+
+
 # ---- 枚举定义 ----
 
 class FaultCode(IntEnum):
@@ -156,6 +170,10 @@ class FeederSpec:
     PIID_SCHEDULE = 3
     PIID_FEEDING_ENABLE = 4
     PIID_BEEP = 5
+
+    # 服务 5: custom
+    SIID_CUSTOM = 5
+    PIID_FEEDING_PLAN = 1
 
     # 所有可读属性
     READABLE_PROPS: list[tuple[int, int]] = [
@@ -267,4 +285,17 @@ class FeederController:
             siid=FeederSpec.SIID_FUNCTION,
             piid=FeederSpec.PIID_FEEDING_ENABLE,
             value=value,
+        )
+
+    async def set_schedule(self, meals: list[dict], enabled: bool = True) -> bool:
+        """写入喂食计划到设备
+        meals: [{"hour": 8, "minute": 0, "portions": 3}, ...]
+        """
+        encoded = encode_schedule(meals, enabled)
+        # 写入 SIID=5 PIID=1 (feeding-plan)，设备同时同步到 SIID=3 PIID=3
+        return await self.cloud.set_prop(
+            self.did,
+            siid=FeederSpec.SIID_CUSTOM,
+            piid=FeederSpec.PIID_FEEDING_PLAN,
+            value=encoded,
         )
