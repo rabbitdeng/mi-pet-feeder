@@ -1,0 +1,403 @@
+* { box-sizing: border-box; margin: 0; padding: 0; }
+
+:root {
+    --bg: #FFF8F0;
+    --card: #FFFFFF;
+    --primary: #FF9800;
+    --primary-dark: #F57C00;
+    --accent: #FF7043;
+    --warm: #FFB74D;
+    --text: #4E342E;
+    --text-light: #8D6E63;
+    --green: #66BB6A;
+    --red: #EF5350;
+    --blue: #42A5F5;
+    --shadow: 0 2px 12px rgba(255, 152, 0, 0.08);
+    --radius: 16px;
+}
+
+body {
+    font-family: -apple-system, BlinkMacSystemFont, "PingFang SC", "Hiragino Sans GB", "Microsoft YaHei", sans-serif;
+    background: var(--bg);
+    color: var(--text);
+    line-height: 1.6;
+    min-height: 100vh;
+    -webkit-font-smoothing: antialiased;
+}
+
+/* 背景装饰 */
+body::before {
+    content: '';
+    position: fixed;
+    top: -100px;
+    right: -80px;
+    width: 300px;
+    height: 300px;
+    background: radial-gradient(circle, rgba(255,183,77,0.15) 0%, transparent 70%);
+    border-radius: 50%;
+    pointer-events: none;
+    z-index: 0;
+}
+
+.container {
+    max-width: 480px;
+    margin: 0 auto;
+    padding: 16px;
+    position: relative;
+    z-index: 1;
+}
+
+/* ---- 头部 ---- */
+.header {
+    text-align: center;
+    padding: 20px 0 8px;
+}
+.header .cat-emoji {
+    font-size: 56px;
+    display: block;
+    animation: bounce 2s ease-in-out infinite;
+}
+@keyframes bounce {
+    0%, 100% { transform: translateY(0); }
+    50% { transform: translateY(-8px); }
+}
+.header .status-text {
+    font-size: 1.1em;
+    font-weight: 600;
+    color: var(--text-light);
+    margin-top: 4px;
+}
+.header .status-text.hungry { color: var(--accent); }
+.header .status-text.full { color: var(--green); }
+
+/* ---- 错误提示 ---- */
+.error-box {
+    background: #FFF3E0;
+    border: 1px solid #FFCC80;
+    border-radius: 12px;
+    padding: 16px;
+    margin-bottom: 12px;
+    color: #E65100;
+    font-size: 0.9em;
+}
+
+/* ---- 卡片 ---- */
+.card {
+    background: var(--card);
+    border-radius: var(--radius);
+    padding: 18px;
+    margin-bottom: 12px;
+    box-shadow: var(--shadow);
+}
+.card-title {
+    font-size: 0.85em;
+    font-weight: 600;
+    color: var(--text-light);
+    text-transform: uppercase;
+    letter-spacing: 0.5px;
+    margin-bottom: 12px;
+}
+
+/* ---- 温湿度 ---- */
+.env-row {
+    display: flex;
+    gap: 12px;
+    margin-bottom: 12px;
+}
+.env-card {
+    flex: 1;
+    background: var(--card);
+    border-radius: var(--radius);
+    padding: 16px;
+    text-align: center;
+    box-shadow: var(--shadow);
+}
+.env-card .icon {
+    font-size: 28px;
+    margin-bottom: 4px;
+}
+.env-card .value {
+    font-size: 2em;
+    font-weight: 700;
+    color: var(--text);
+    line-height: 1.1;
+}
+.env-card .unit {
+    font-size: 0.5em;
+    font-weight: 400;
+    color: var(--text-light);
+}
+.env-card .label {
+    font-size: 0.8em;
+    color: var(--text-light);
+    margin-top: 2px;
+}
+
+/* 温度渐变颜色 */
+.env-card.temp .value { color: #FF9800; }
+.env-card.humi .value { color: #42A5F5; }
+
+/* ---- 饱食度 ---- */
+.fullness-section { margin-bottom: 12px; }
+
+/* 时间衰减条 */
+.progress-bar-wrap {
+    margin-bottom: 10px;
+}
+.progress-bar-wrap .row {
+    display: flex;
+    justify-content: space-between;
+    margin-bottom: 4px;
+    font-size: 0.85em;
+    color: var(--text-light);
+}
+.progress-bar {
+    height: 10px;
+    border-radius: 5px;
+    background: #FFE0B2;
+    overflow: hidden;
+}
+.progress-bar .fill {
+    height: 100%;
+    border-radius: 5px;
+    background: linear-gradient(90deg, #FF9800, #FFB74D);
+    transition: width 1s ease;
+}
+
+/* 环形进度 */
+.ring-row {
+    display: flex;
+    align-items: center;
+    gap: 16px;
+}
+.ring-wrap {
+    position: relative;
+    width: 80px;
+    height: 80px;
+    flex-shrink: 0;
+}
+.ring-wrap svg {
+    transform: rotate(-90deg);
+}
+.ring-wrap .ring-bg {
+    fill: none;
+    stroke: #FFE0B2;
+    stroke-width: 8;
+}
+.ring-wrap .ring-fill {
+    fill: none;
+    stroke: #FF9800;
+    stroke-width: 8;
+    stroke-linecap: round;
+    transition: stroke-dashoffset 1s ease;
+}
+.ring-center {
+    position: absolute;
+    top: 50%;
+    left: 50%;
+    transform: translate(-50%, -50%);
+    text-align: center;
+}
+.ring-center .num {
+    font-size: 1.3em;
+    font-weight: 700;
+    line-height: 1;
+}
+.ring-center .pct {
+    font-size: 0.65em;
+    color: var(--text-light);
+}
+.ring-info {
+    font-size: 0.85em;
+    color: var(--text-light);
+    line-height: 1.5;
+}
+.ring-info strong {
+    color: var(--text);
+}
+
+/* ---- 营养建议 ---- */
+.nutrition-row {
+    display: flex;
+    align-items: center;
+}
+.nutrition-item {
+    flex: 1;
+    text-align: center;
+    padding: 6px 4px;
+}
+.nutrition-num {
+    font-size: 1.3em;
+    font-weight: 700;
+    color: var(--primary-dark);
+    line-height: 1.2;
+}
+.nutrition-lbl {
+    font-size: 0.75em;
+    color: var(--text-light);
+}
+.nutrition-divider {
+    width: 1px;
+    height: 36px;
+    background: #f0f0f0;
+}
+
+/* ---- 猫咪档案 ---- */
+.edit-btn {
+    background: none;
+    border: 1px solid #ddd;
+    border-radius: 8px;
+    padding: 4px 12px;
+    font-size: 0.75em;
+    color: #999;
+    cursor: pointer;
+}
+.cat-info-row {
+    display: flex;
+    gap: 0;
+}
+.cat-info-item {
+    flex: 1;
+    text-align: center;
+    padding: 8px 4px;
+}
+.cat-info-item + .cat-info-item {
+    border-left: 1px solid #f0f0f0;
+}
+.cat-info-label {
+    font-size: 0.75em;
+    color: var(--text-light);
+    margin-bottom: 2px;
+}
+.cat-info-val {
+    font-size: 1.1em;
+    font-weight: 600;
+    color: var(--text);
+}
+.cat-edit-row {
+    display: flex;
+    align-items: center;
+    gap: 10px;
+    margin-bottom: 8px;
+}
+.cat-edit-row label {
+    width: 40px;
+    font-size: 0.85em;
+    color: var(--text-light);
+    flex-shrink: 0;
+}
+.cat-edit-row input {
+    flex: 1;
+    padding: 8px 12px;
+    border: 1px solid #FFE0B2;
+    border-radius: 10px;
+    font-size: 0.95em;
+    outline: none;
+    transition: border 0.2s;
+}
+.cat-edit-row input:focus {
+    border-color: var(--primary);
+}
+
+/* ---- 快捷操作 ---- */
+.quick-actions {
+    display: flex;
+    gap: 10px;
+}
+.quick-btn {
+    flex: 1;
+    padding: 14px;
+    border: none;
+    border-radius: 12px;
+    font-size: 1em;
+    font-weight: 600;
+    cursor: pointer;
+    transition: all 0.2s;
+}
+.quick-btn.primary {
+    background: linear-gradient(135deg, #FF9800, #F57C00);
+    color: white;
+    box-shadow: 0 4px 12px rgba(255, 152, 0, 0.3);
+}
+.quick-btn.primary:active { transform: scale(0.96); }
+.quick-btn.secondary {
+    background: #FFF3E0;
+    color: #E65100;
+}
+.quick-btn:disabled {
+    opacity: 0.5;
+    pointer-events: none;
+}
+
+/* ---- 页脚 ---- */
+.footer {
+    text-align: center;
+    padding: 12px 0 24px;
+    font-size: 0.8em;
+    color: #ccc;
+}
+
+/* ---- 连接指示器 ---- */
+.connection-dot {
+    display: inline-block;
+    width: 8px;
+    height: 8px;
+    border-radius: 50%;
+    margin-right: 4px;
+}
+.connection-dot.online { background: var(--green); }
+.connection-dot.offline { background: var(--red); }
+
+/* ---- 模态弹窗 ---- */
+.modal-overlay {
+    display: none;
+    position: fixed;
+    top: 0; left: 0; right: 0; bottom: 0;
+    background: rgba(0,0,0,0.3);
+    z-index: 100;
+    justify-content: center;
+    align-items: flex-end;
+}
+.modal-overlay.active { display: flex; }
+.modal-sheet {
+    background: white;
+    border-radius: 20px 20px 0 0;
+    padding: 24px 20px 32px;
+    width: 100%;
+    max-width: 480px;
+    box-shadow: 0 -4px 20px rgba(0,0,0,0.1);
+}
+.modal-sheet h3 {
+    text-align: center;
+    margin-bottom: 16px;
+    font-size: 1.1em;
+}
+.modal-sheet .portion-row {
+    display: flex;
+    align-items: center;
+    gap: 12px;
+    margin-bottom: 16px;
+}
+.modal-sheet input[type=range] { flex: 1; }
+.modal-sheet .portion-val {
+    font-weight: 700;
+    font-size: 1.2em;
+    min-width: 2em;
+    text-align: center;
+}
+.modal-sheet .btn-row {
+    display: flex;
+    gap: 10px;
+}
+.modal-sheet .btn-row button { flex: 1; }
+.modal-sheet .btn-cancel {
+    background: #f0f0f0;
+    color: #666;
+}
+
+/* 动画 */
+@keyframes fadeIn {
+    from { opacity: 0; transform: translateY(10px); }
+    to { opacity: 1; transform: translateY(0); }
+}
+.card, .env-card { animation: fadeIn 0.4s ease; }

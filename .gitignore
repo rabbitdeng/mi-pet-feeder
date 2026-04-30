@@ -1,0 +1,12 @@
+.env
+__pycache__/
+*.pyc
+.venv/
+venv/
+.idea/
+.vscode/
+*.swp
+*.swo
+feed_history.json
+cat_profile.json
+.mi.token

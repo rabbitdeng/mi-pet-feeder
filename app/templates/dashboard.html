@@ -1,0 +1,614 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, user-scalable=no">
+    <title>猫咪仪表盘</title>
+    <link rel="stylesheet" href="/static/dashboard.css">
+</head>
+<body>
+    <div class="container">
+        <!-- 头部 — 猫咪状态 -->
+        <div class="header">
+            <span class="cat-emoji" id="cat-emoji">🐱</span>
+            <div class="status-text" id="status-text">正在连接...</div>
+            <small style="color:#ccc;font-size:0.75em">
+                <span class="connection-dot offline" id="conn-dot"></span>
+                <span id="conn-text">未连接</span>
+            </small>
+        </div>
+
+        {% if error %}
+        <div class="error-box">
+            <strong>初始化失败</strong>
+            <p>{{ error }}</p>
+        </div>
+        {% endif %}
+
+        <!-- 温湿度 -->
+        <div class="env-row">
+            <div class="env-card temp">
+                <div class="icon">🌡️</div>
+                <div class="value" id="temp-val">—<span class="unit">°C</span></div>
+                <div class="label">温度</div>
+            </div>
+            <div class="env-card humi">
+                <div class="icon">💧</div>
+                <div class="value" id="humi-val">—<span class="unit">%</span></div>
+                <div class="label">湿度</div>
+            </div>
+        </div>
+
+        <!-- 猫咪信息 -->
+        <div class="card" id="cat-card">
+            <div class="card-title" style="display:flex;justify-content:space-between;align-items:center;">
+                🐱 猫咪档案
+                <button class="edit-btn" id="cat-edit-btn" onclick="toggleCatEdit()">✏️ 编辑</button>
+            </div>
+            <!-- 查看模式 -->
+            <div id="cat-view">
+                <div class="cat-info-row">
+                    <div class="cat-info-item">
+                        <div class="cat-info-label">品种</div>
+                        <div class="cat-info-val" id="cat-breed-view">—</div>
+                    </div>
+                    <div class="cat-info-item">
+                        <div class="cat-info-label">年龄</div>
+                        <div class="cat-info-val" id="cat-age-view">—</div>
+                    </div>
+                    <div class="cat-info-item">
+                        <div class="cat-info-label">体重</div>
+                        <div class="cat-info-val" id="cat-weight-view">—</div>
+                    </div>
+                </div>
+                <div style="font-size:0.75em;color:var(--text-light);text-align:center;margin-top:4px;" id="cat-food-label-view"></div>
+            </div>
+            <!-- 编辑模式 -->
+            <div id="cat-edit" style="display:none;">
+                <div class="cat-edit-row">
+                    <label>品种</label>
+                    <input id="cat-breed-input" placeholder="如：英短、布偶...">
+                </div>
+                <div class="cat-edit-row">
+                    <label>年龄</label>
+                    <input id="cat-age-input" placeholder="如：2岁、8个月...">
+                </div>
+                <div class="cat-edit-row">
+                    <label>体重</label>
+                    <input id="cat-weight-input" placeholder="如：4.5kg">
+                </div>
+                <div class="cat-edit-row">
+                    <label>品牌</label>
+                    <select id="cat-food-brand" onchange="onBrandChange()">
+                        <option value="">选择品牌</option>
+                    </select>
+                </div>
+                <div class="cat-edit-row">
+                    <label>产品</label>
+                    <select id="cat-food-product">
+                        <option value="">先选品牌</option>
+                    </select>
+                </div>
+                <div id="food-detail" style="font-size:0.75em;color:var(--text-light);margin-top:4px;text-align:right;" hidden>
+                    <span id="food-kcal-info"></span>
+                </div>
+                <div style="display:flex;gap:8px;margin-top:10px;">
+                    <button class="quick-btn secondary" onclick="toggleCatEdit()">取消</button>
+                    <button class="quick-btn primary" id="cat-save-btn" onclick="saveCat()">保存</button>
+                </div>
+            </div>
+        </div>
+
+        <!-- 营养建议 -->
+        <div class="card" id="nutrition-card" hidden>
+            <div class="card-title">🍖 每日营养建议</div>
+            <div class="nutrition-row">
+                <div class="nutrition-item">
+                    <div class="nutrition-num" id="nut-der">—</div>
+                    <div class="nutrition-lbl">每日热量</div>
+                </div>
+                <div class="nutrition-divider"></div>
+                <div class="nutrition-item">
+                    <div class="nutrition-num" id="nut-grams">—</div>
+                    <div class="nutrition-lbl">建议喂食</div>
+                </div>
+                <div class="nutrition-divider"></div>
+                <div class="nutrition-item">
+                    <div class="nutrition-num" id="nut-stage">—</div>
+                    <div class="nutrition-lbl">生命阶段</div>
+                </div>
+            </div>
+            <div style="margin-top:4px;font-size:0.7em;color:var(--text-light);text-align:center;" id="nut-formula"></div>
+        </div>
+
+        <!-- 饱食度 -->
+        <div class="card fullness-section">
+            <div class="card-title">🍽️ 饱食度</div>
+            <!-- 时间衰减 -->
+            <div class="progress-bar-wrap">
+                <div class="row">
+                    <span>距上次喂食</span>
+                    <span id="last-feed-text">—</span>
+                </div>
+                <div class="progress-bar">
+                    <div class="fill" id="time-bar" style="width: 0%"></div>
+                </div>
+            </div>
+            <!-- 今日目标环 -->
+            <div class="ring-row">
+                <div class="ring-wrap">
+                    <svg width="80" height="80" viewBox="0 0 80 80">
+                        <circle class="ring-bg" cx="40" cy="40" r="34"/>
+                        <circle class="ring-fill" id="goal-ring" cx="40" cy="40" r="34"
+                            stroke-dasharray="213.6" stroke-dashoffset="213.6"/>
+                    </svg>
+                    <div class="ring-center">
+                        <div class="num" id="goal-num">0</div>
+                        <div class="pct" id="goal-unit-text">/50g</div>
+                    </div>
+                </div>
+                <div class="ring-info">
+                    今日已吃<br><strong id="today-amount">0 g</strong><br>
+                    <span style="font-size:0.75em;color:#aaa" id="goal-text">目标 50g/天</span><br>
+                    <span style="font-size:0.7em;color:var(--green)" id="device-badge" hidden>📡 设备数据</span>
+                </div>
+            </div>
+        </div>
+
+        <!-- 今日喂食计划 -->
+        <div class="card" id="plan-card" hidden>
+            <div class="card-title">⏰ 今日喂食计划 <span style="font-weight:400;font-size:0.85em;color:var(--text-light)" id="plan-status"></span></div>
+            <div id="plan-list" style="font-size:0.9em;color:var(--text-light);"></div>
+            <div style="margin-top:6px;font-size:0.8em;color:var(--text-light);text-align:right">
+                计划总量: <strong id="plan-total">0</strong> 份
+            </div>
+        </div>
+
+        <!-- 今日记录 -->
+        <div class="card" id="daily-record-card">
+            <div class="card-title">📋 今日记录</div>
+            <div id="daily-record-list" style="font-size:0.9em;color:var(--text-light);">
+                <div style="text-align:center;padding:8px;">加载中...</div>
+            </div>
+            <div id="daily-stats" style="display:none;margin-top:8px;padding-top:8px;border-top:2px solid #FFE0B2;font-size:0.85em;text-align:right;color:var(--text);">
+                自动出粮 <strong id="stat-auto">0</strong> 份 ·
+                手动加餐 <strong id="stat-manual">0</strong> 份 ·
+                合计 <strong id="stat-total">0</strong> 份
+            </div>
+        </div>
+
+        <!-- 快捷操作 -->
+        <div class="quick-actions">
+            <button class="quick-btn primary" onclick="openFeed()">🐾 喂零食</button>
+        </div>
+
+        <div class="footer">
+            自动刷新 · <span id="countdown">5</span>s
+        </div>
+    </div>
+
+    <!-- 喂食弹窗 -->
+    <div class="modal-overlay" id="feed-modal">
+        <div class="modal-sheet">
+            <h3>🐾 手动出粮</h3>
+            <div class="portion-row">
+                <input type="range" id="portion-slider" min="1" max="30" value="5">
+                <span class="portion-val" id="portion-val">5</span>
+                <span style="color:#888">份</span>
+            </div>
+            <div class="btn-row">
+                <button class="quick-btn btn-cancel" onclick="closeFeed()">取消</button>
+                <button class="quick-btn primary" id="btn-feed" onclick="doFeed()">出粮</button>
+            </div>
+        </div>
+    </div>
+
+    <script>
+        const RING_CIRCUMFERENCE = 213.6;
+
+        function setConnected(ok) {
+            document.getElementById('conn-dot').className = 'connection-dot ' + (ok ? 'online' : 'offline');
+            document.getElementById('conn-text').textContent = ok ? '已连接' : '断开';
+        }
+
+        async function refresh() {
+            try {
+                const resp = await fetch('/api/dashboard');
+                if (!resp.ok) { setConnected(false); return; }
+                const json = await resp.json();
+                if (!json.ok) { setConnected(false); return; }
+                setConnected(true);
+                updateUI(json);
+            } catch (e) {
+                setConnected(false);
+            }
+        }
+
+        function updateUI(data) {
+            // 温湿度
+            const tempEl = document.getElementById('temp-val');
+            const humiEl = document.getElementById('humi-val');
+            if (data.temperature != null) {
+                tempEl.innerHTML = data.temperature.toFixed(1) + '<span class="unit">°C</span>';
+            }
+            if (data.humidity != null) {
+                humiEl.innerHTML = data.humidity + '<span class="unit">%</span>';
+            }
+
+            // 饱食度
+            const f = data.fullness || {};
+            const timeBar = document.getElementById('time-bar');
+            timeBar.style.width = f.time_based + '%';
+            if (f.time_based > 60) timeBar.style.background = 'linear-gradient(90deg, #66BB6A, #81C784)';
+            else if (f.time_based > 30) timeBar.style.background = 'linear-gradient(90deg, #FF9800, #FFB74D)';
+            else timeBar.style.background = 'linear-gradient(90deg, #EF5350, #FF7043)';
+
+            if (f.last_feed_minutes != null) {
+                const mins = f.last_feed_minutes;
+                document.getElementById('last-feed-text').textContent =
+                    mins < 60 ? mins + ' 分钟前' :
+                    mins < 1440 ? Math.floor(mins / 60) + ' 小时前' :
+                    Math.floor(mins / 1440) + ' 天前';
+            } else {
+                document.getElementById('last-feed-text').textContent = '尚无记录';
+            }
+            document.getElementById('today-amount').textContent = f.today_amount + ' ' + f.unit;
+            document.getElementById('goal-num').textContent = f.today_amount;
+            document.getElementById('goal-unit-text').textContent = '/' + f.goal_amount + f.unit;
+            document.getElementById('goal-text').textContent = '目标 ' + f.goal_amount + f.unit + '/天';
+            document.getElementById('device-badge').hidden = (f.device_eaten == null);
+
+            // 环形进度
+            const offset = RING_CIRCUMFERENCE * (1 - f.today_goal / 100);
+            document.getElementById('goal-ring').style.strokeDashoffset = offset;
+
+            // 猫咪档案
+            if (data.cat) updateCatProfile(data.cat);
+            updateNutrition(data.nutrition, data.cat);
+
+            // 猫咪表情（综合实际进食量 + 时间衰减）
+            updateCat(f);
+
+            // 喂食计划 + 今日记录
+            const feeder = data.feeder || {};
+            renderDailyRecords(feeder, f);
+        }
+
+        function renderDailyRecords(feeder, f) {
+            const plan = feeder.feeding_plan;
+            const planCard = document.getElementById('plan-card');
+
+            // 喂食计划
+            if (plan && plan.meals && plan.meals.length > 0) {
+                planCard.hidden = false;
+                document.getElementById('plan-status').textContent =
+                    plan.enabled ? '(已开启)' : '(已暂停)';
+                const planList = document.getElementById('plan-list');
+                const now = new Date();
+                const currentMin = now.getHours() * 60 + now.getMinutes();
+
+                planList.innerHTML = plan.meals.map(m => {
+                    const mealMin = m.hour * 60 + m.minute;
+                    const isPast = currentMin >= mealMin;
+                    const dot = isPast ? '🟢' : '⚪';
+                    const style = isPast ? '' : 'color:#bbb;';
+                    return `<div style="display:flex;justify-content:space-between;padding:5px 0;border-bottom:1px solid #f5f5f5;${style}">
+                        <span>${dot} ${m.time}</span>
+                        <span style="font-weight:600;">${m.portions} 份</span>
+                    </div>`;
+                }).join('');
+                document.getElementById('plan-total').textContent = plan.total_portions;
+            } else {
+                planCard.hidden = true;
+            }
+
+            // 今日记录 — 结合计划 + 手动记录
+            const recordList = document.getElementById('daily-record-list');
+            const manualFeeds = (f.today_log || []).map(e => ({
+                time: e.time,
+                portions: e.portions,
+                type: 'manual',
+                label: '手动'
+            }));
+            const planFeeds = (plan && plan.meals ? plan.meals.map(m => ({
+                time: m.time,
+                portions: m.portions,
+                type: 'auto',
+                label: '定时'
+            })) : []);
+
+            // 合并、去重(同一时间同类型同份数去重)、排序
+            const all = [...planFeeds, ...manualFeeds].sort((a, b) =>
+                a.time.localeCompare(b.time)
+            );
+
+            if (all.length > 0) {
+                recordList.innerHTML = all.map((e, i) => {
+                    const icon = e.type === 'auto' ? '⏰' : '👆';
+                    const tagStyle = e.type === 'auto'
+                        ? 'background:#E8F5E9;color:#2E7D32;'
+                        : 'background:#FFF3E0;color:#E65100;';
+                    return `<div style="display:flex;justify-content:space-between;align-items:center;padding:6px 0;border-bottom:1px solid #f0f0f0;">
+                        <span>${icon} ${e.time}</span>
+                        <span style="display:flex;align-items:center;gap:6px;">
+                            <span style="font-size:0.7em;padding:1px 6px;border-radius:8px;${tagStyle}">${e.label}</span>
+                            <span style="font-weight:600;color:var(--text);min-width:2.5em;text-align:right;">${e.portions} 份</span>
+                        </span>
+                    </div>`;
+                }).join('');
+
+                // 统计
+                const autoTotal = all.filter(e => e.type === 'auto').reduce((s, e) => s + e.portions, 0);
+                const manualTotal = all.filter(e => e.type === 'manual').reduce((s, e) => s + e.portions, 0);
+                document.getElementById('daily-stats').style.display = 'block';
+                document.getElementById('stat-auto').textContent = autoTotal;
+                document.getElementById('stat-manual').textContent = manualTotal;
+                document.getElementById('stat-total').textContent = autoTotal + manualTotal;
+            } else {
+                recordList.innerHTML = '<div style="text-align:center;padding:8px;color:#ccc;">暂无记录</div>';
+                document.getElementById('daily-stats').style.display = 'none';
+            }
+        }
+
+        function updateCat(f) {
+            const emoji = document.getElementById('cat-emoji');
+            const status = document.getElementById('status-text');
+            const todayPct = f.today_goal;      // 今日目标完成度 (0-100+)
+            const timeScore = f.time_based;      // 时间衰减饱食度 (0-100)
+            const hasData = f.last_feed_minutes != null;
+
+            // 无任何数据
+            if (!hasData && todayPct <= 0) {
+                emoji.textContent = '🐱';
+                status.textContent = '等待喂食记录';
+                status.className = 'status-text';
+                return;
+            }
+
+            // 今日目标已达成 → 必然满足
+            if (todayPct >= 100) {
+                emoji.textContent = '😸';
+                status.textContent = '今日目标达成！';
+                status.className = 'status-text full';
+            }
+            // 已完成大半 + 时间不太久
+            else if (todayPct >= 60 && timeScore >= 30) {
+                emoji.textContent = '😸';
+                status.textContent = '猫咪挺满足的';
+                status.className = 'status-text full';
+            }
+            // 已完成大半 + 但隔了挺久
+            else if (todayPct >= 60) {
+                emoji.textContent = '🐱';
+                status.textContent = '吃过了，但有点饿了';
+                status.className = 'status-text';
+            }
+            // 吃了小半 + 最近喂过
+            else if (todayPct >= 30 && timeScore >= 50) {
+                emoji.textContent = '🐱';
+                status.textContent = '刚吃过，还行';
+                status.className = 'status-text';
+            }
+            // 吃了小半 + 间隔久了
+            else if (todayPct >= 30) {
+                emoji.textContent = '🐱';
+                status.textContent = '猫咪饿了，该喂了';
+                status.className = 'status-text hungry';
+            }
+            // 吃了一点 + 时间不久
+            else if (todayPct > 0 && timeScore >= 60) {
+                emoji.textContent = '🐱';
+                status.textContent = '吃得不多，但还行';
+                status.className = 'status-text';
+            }
+            // 吃了一点 + 时间久了
+            else if (todayPct > 0) {
+                emoji.textContent = '🙀';
+                status.textContent = '猫咪很饿，快喂食！';
+                status.className = 'status-text hungry';
+            }
+            // 今天还没吃，但有过喂食
+            else if (hasData) {
+                emoji.textContent = '🙀';
+                status.textContent = '今天还没怎么吃！';
+                status.className = 'status-text hungry';
+            }
+        }
+
+        // 喂食弹窗
+        function openFeed() {
+            document.getElementById('feed-modal').classList.add('active');
+            document.getElementById('portion-slider').value = 5;
+            document.getElementById('portion-val').textContent = 5;
+            document.getElementById('btn-feed').textContent = '出粮';
+            document.getElementById('btn-feed').disabled = false;
+        }
+        function closeFeed() {
+            document.getElementById('feed-modal').classList.remove('active');
+        }
+        async function doFeed() {
+            const portions = document.getElementById('portion-slider').value;
+            const btn = document.getElementById('btn-feed');
+            btn.disabled = true;
+            btn.textContent = '出粮中...';
+            try {
+                const resp = await fetch('/api/feed?portions=' + portions, { method: 'POST' });
+                const json = await resp.json();
+                btn.textContent = json.ok ? '✓ 完成' : '✗ 失败';
+            } catch (e) {
+                btn.textContent = '✗ 网络错误';
+            }
+            setTimeout(() => { closeFeed(); refresh(); }, 1500);
+        }
+
+        // 滑块联动
+        document.getElementById('portion-slider').addEventListener('input', function () {
+            document.getElementById('portion-val').textContent = this.value;
+        });
+
+        // 点击遮罩关闭
+        document.getElementById('feed-modal').addEventListener('click', function (e) {
+            if (e.target === this) closeFeed();
+        });
+
+        // 营养建议
+        function updateNutrition(nutrition, cat) {
+            const card = document.getElementById('nutrition-card');
+            if (!nutrition) { card.hidden = true; return; }
+            card.hidden = false;
+            document.getElementById('nut-der').textContent = nutrition.der_kcal + ' kcal';
+            document.getElementById('nut-grams').textContent = nutrition.daily_grams + 'g/天';
+            document.getElementById('nut-stage').textContent = nutrition.life_stage;
+            const foodInfo = (cat && cat.food_label)
+                ? '猫粮: ' + cat.food_label + ' (' + nutrition.kcal_per_gram + ' kcal/g)'
+                : '猫粮 ' + nutrition.kcal_per_gram + 'kcal/g';
+            document.getElementById('nut-formula').textContent =
+                '体重 ' + nutrition.weight_kg + 'kg · RER ' + nutrition.rer_kcal + 'kcal · 系数 ×' + nutrition.life_stage_factor +
+                ' · ' + foodInfo;
+        }
+
+        // 猫咪档案
+        // 猫粮品牌数据缓存
+        let foodCache = {};  // { brand: [products], ... }
+        let currentFoodId = '';
+
+        async function loadFoodBrands() {
+            try {
+                const resp = await fetch('/api/foods');
+                const json = await resp.json();
+                if (json.ok) foodCache = json.data;
+                const brandSelect = document.getElementById('cat-food-brand');
+                brandSelect.innerHTML = '<option value="">选择品牌</option>';
+                Object.keys(foodCache).sort().forEach(brand => {
+                    brandSelect.innerHTML += `<option value="${brand}">${brand}</option>`;
+                });
+            } catch (e) {}
+        }
+
+        function onBrandChange() {
+            const brand = document.getElementById('cat-food-brand').value;
+            const productSelect = document.getElementById('cat-food-product');
+            const detailEl = document.getElementById('food-detail');
+            productSelect.innerHTML = '<option value="">选择产品</option>';
+            detailEl.hidden = true;
+            if (!brand || !foodCache[brand]) return;
+            foodCache[brand].forEach(f => {
+                productSelect.innerHTML +=
+                    `<option value="${f.id}" data-kcal="${f.kcal_per_g}" data-protein="${f.protein_pct}" data-fat="${f.fat_pct}" data-type="${f.type_label}" data-stage="${f.stage_label}">${f.name} (${f.kcal_per_g} kcal/g)</option>`;
+            });
+            // 如果当前 food_id 属于这个品牌，默认选中
+            if (currentFoodId) {
+                productSelect.value = currentFoodId;
+                onProductChange();
+            }
+        }
+
+        function onProductChange() {
+            const sel = document.getElementById('cat-food-product');
+            const option = sel.selectedOptions[0];
+            const detailEl = document.getElementById('food-detail');
+            if (option && option.dataset.kcal) {
+                detailEl.hidden = false;
+                document.getElementById('food-kcal-info').textContent =
+                    option.dataset.kcal + ' kcal/g · ' +
+                    option.dataset.protein + '% 蛋白 · ' +
+                    option.dataset.fat + '% 脂肪 · ' +
+                    option.dataset.type + ' · ' + option.dataset.stage;
+            } else {
+                detailEl.hidden = true;
+            }
+        }
+
+        function updateCatProfile(cat) {
+            document.getElementById('cat-breed-view').textContent = cat.breed || '—';
+            document.getElementById('cat-age-view').textContent = cat.age || '—';
+            document.getElementById('cat-weight-view').textContent = cat.weight || '—';
+            document.getElementById('cat-food-label-view').textContent =
+                cat.food_label ? '🍖 ' + cat.food_label : '';
+            currentFoodId = cat.food_id || '';
+            const editMode = document.getElementById('cat-edit').style.display !== 'none';
+            if (!editMode) {
+                document.getElementById('cat-breed-input').value = cat.breed || '';
+                document.getElementById('cat-age-input').value = cat.age || '';
+                document.getElementById('cat-weight-input').value = cat.weight || '';
+            }
+        }
+
+        async function toggleCatEdit() {
+            const view = document.getElementById('cat-view');
+            const edit = document.getElementById('cat-edit');
+            const btn = document.getElementById('cat-edit-btn');
+            if (edit.style.display === 'none') {
+                view.style.display = 'none';
+                edit.style.display = 'block';
+                btn.textContent = '✖ 取消';
+                // 延迟加载品牌列表
+                if (Object.keys(foodCache).length === 0) await loadFoodBrands();
+                // 恢复当前选择
+                if (currentFoodId) {
+                    // 找到 food_id 对应的品牌
+                    let foundBrand = '';
+                    for (const [brand, products] of Object.entries(foodCache)) {
+                        if (products.some(p => p.id === currentFoodId)) {
+                            foundBrand = brand;
+                            break;
+                        }
+                    }
+                    if (foundBrand) {
+                        document.getElementById('cat-food-brand').value = foundBrand;
+                        onBrandChange();
+                    }
+                }
+                document.getElementById('cat-food-product').addEventListener('change', onProductChange);
+            } else {
+                view.style.display = 'block';
+                edit.style.display = 'none';
+                btn.textContent = '✏️ 编辑';
+            }
+        }
+
+        async function saveCat() {
+            const btn = document.getElementById('cat-save-btn');
+            btn.disabled = true;
+            btn.textContent = '保存中...';
+            const breed = document.getElementById('cat-breed-input').value.trim();
+            const age = document.getElementById('cat-age-input').value.trim();
+            const weight = document.getElementById('cat-weight-input').value.trim();
+            const food_id = document.getElementById('cat-food-product').value;
+            const food_label = document.getElementById('cat-food-product').selectedOptions[0]?.textContent || '';
+            try {
+                const resp = await fetch('/api/cat', {
+                    method: 'POST',
+                    headers: {'Content-Type': 'application/json'},
+                    body: JSON.stringify({breed, age, weight, food_id, food_label})
+                });
+                const json = await resp.json();
+                if (json.ok) {
+                    currentFoodId = json.data.food_id;
+                    updateCatProfile(json.data);
+                    toggleCatEdit();
+                    refresh();
+                }
+            } catch (e) {
+                // ignore
+            }
+            btn.disabled = false;
+            btn.textContent = '保存';
+        }
+
+        // 定时刷新
+        let countdown = 5;
+        setInterval(() => {
+            countdown--;
+            if (countdown <= 0) {
+                countdown = 5;
+                refresh();
+            }
+            document.getElementById('countdown').textContent = countdown;
+        }, 1000);
+
+        // 首次加载
+        refresh();
+    </script>
+</body>
+</html>
